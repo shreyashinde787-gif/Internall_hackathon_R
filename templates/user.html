@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Citizen Grievance Portal | INFRA-PREDICT AI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg: #080d17; --bg2: #0d1526; --bg3: #111e33;
+  --border: #1a2d4a; --border2: #213859;
+  --text: #c8d4e8; --text-dim: #4e6a96;
+  --accent: #3b82f6; --critical: #ef4444; --high: #f97316; --low: #22c55e;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; padding: 20px; }
+.wrap { max-width: 1050px; margin: 0 auto; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.app-title { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; color: #fff; }
+.link-auth { color: var(--accent); text-decoration: none; font-size: 0.82rem; font-weight: 600; border: 1px solid var(--border2); padding: 8px 14px; border-radius: 6px; }
+.link-auth:hover { background: var(--bg3); }
+
+.grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
+
+label { display: block; font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 6px; }
+input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border2); color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 14px; font-family: var(--font-body); font-size: 0.85rem; }
+textarea { resize: vertical; min-height: 85px; }
+
+.btn-submit { width: 100%; background: linear-gradient(135deg, #1d4ed8, #2563eb); border: none; color: #fff; padding: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
+.btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.result-card { display: none; margin-top: 16px; padding: 16px; border-radius: 8px; background: #051410; border: 1px solid var(--low); color: var(--low); font-size: 0.85rem; line-height: 1.7; }
+#user-map { width: 100%; height: 340px; border-radius: 6px; background: #060b13; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <div class="app-title">📢 Citizen Infrastructure Grievance Portal</div>
+      <div style="font-size:0.75rem;color:var(--text-dim);">PMC Smart City · Real-Time ML Defect Assessment</div>
+    </div>
+    <a href="/authority" class="link-auth">🏛️ Authority Command Center →</a>
+  </header>
+
+  <div class="grid">
+    <!-- SUBMISSION FORM -->
+    <div class="card">
+      <h3 style="font-family:var(--font-display);color:#fff;margin-bottom:14px;">📝 Report Road / Bridge Problem</h3>
+      <form id="citizen-form" onsubmit="event.preventDefault(); submitCitizenReport();">
+        <label>Infrastructure Category</label>
+        <select id="category">
+          <option>Pothole / Road Surface Breakdown</option>
+          <option>Bridge / Flyover Pillar Damage</option>
+          <option>Drainage Blockage / Overflow</option>
+        </select>
+
+        <label>Defect Description</label>
+        <textarea id="desc" placeholder="E.g., Severe deep pothole and crack causing vehicle damage..." required></textarea>
+
+        <label>Location / Ward</label>
+        <input type="text" id="loc" placeholder="E.g., Aundh Chowk, Ward 12" required/>
+
+        <button type="submit" id="btn-predict" class="btn-submit">🧠 Submit & Run AI Prediction</button>
+      </form>
+
+      <div id="ai-result" class="result-card"></div>
+    </div>
+
+    <!-- LIVE MAP PIN -->
+    <div class="card">
+      <h3 style="font-family:var(--font-display);color:#fff;">📍 Incident Location Pin</h3>
+      <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:8px;">Live incident plotted onto PMC Municipal GIS grid</div>
+      <div id="user-map"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let userMap = null;
+let currentMarker = null;
+
+function initMap() {
+  userMap = L.map('user-map').setView([18.5204, 73.8567], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(userMap);
+}
+
+async function submitCitizenReport() {
+  const cat = document.getElementById('category').value;
+  const desc = document.getElementById('desc').value.trim();
+  const loc = document.getElementById('loc').value.trim();
+  const btn = document.getElementById('btn-predict');
+  const resBox = document.getElementById('ai-result');
+
+  if (!desc || !loc) {
+    alert("Please enter both description and location.");
+    return;
+  }
+
+  btn.textContent = "🧠 AI Predicting Risk Score...";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: cat, description: desc, location: loc })
+    });
+    
+    if (!res.ok) throw new Error("Server error");
+    const d = await res.json();
+
+    // Display prediction result without cost metrics
+    resBox.innerHTML = `
+      ✅ <strong>Report Analyzed &amp; Recorded in SQLite DB!</strong><br>
+      🎫 <b>Ticket ID:</b> ${d.report_id}<br>
+      🧠 <b>AI Risk Score:</b> <span style="color:#ef4444;font-weight:bold;">${d.predicted_probability} (${d.risk_level})</span><br>
+      ⚡ <b>Municipal Status:</b> ${d.action_required}<br>
+      📍 <b>Ward:</b> ${d.location}
+    `;
+    resBox.style.display = "block";
+
+    // Pin on User Map
+    if (d.new_asset && userMap) {
+      if (currentMarker) currentMarker.remove();
+      currentMarker = L.circleMarker([d.new_asset.lat, d.new_asset.lon], {
+        radius: 10, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9
+      }).bindPopup(`<b>${d.new_asset.name}</b><br>AI Risk: ${d.predicted_probability} (${d.risk_level})`).addTo(userMap);
+      userMap.setView([d.new_asset.lat, d.new_asset.lon], 14);
+      currentMarker.openPopup();
+    }
+  } catch (err) {
+    resBox.innerHTML = `⚠️ Error communicating with ML server. Please check backend.`;
+    resBox.style.display = "block";
+  } finally {
+    btn.textContent = "🧠 Submit & Run AI Prediction";
+    btn.disabled = false;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", initMap);
+</script>
+</body>
+</html>

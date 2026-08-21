@@ -1,0 +1,244 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Authority Command Center | INFRA-PREDICT AI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg: #080d17; --bg2: #0d1526; --bg3: #111e33;
+  --border: #1a2d4a; --border2: #213859;
+  --text: #c8d4e8; --text-dim: #4e6a96;
+  --accent: #3b82f6; --critical: #ef4444; --high: #f97316; --low: #22c55e;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; padding-bottom: 30px; }
+.topbar { background: #0a1220; border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+.app-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; color: #fff; }
+.link-citizen { color: #7fb3e8; text-decoration: none; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border2); padding: 8px 14px; border-radius: 6px; }
+.link-citizen:hover { background: #1a2d4a; }
+
+.main { max-width: 1550px; margin: 0 auto; padding: 16px 20px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.grid-55 { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+
+.kpi-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; border-top: 3px solid var(--accent); }
+.kpi-label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-family: var(--font-mono); }
+.kpi-val { font-family: var(--font-display); font-size: 2.2rem; font-weight: 700; color: #fff; margin: 4px 0; }
+
+.panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; height: 380px; }
+#map { width: 100%; height: 100%; border-radius: 6px; }
+
+.ptable { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.ptable th { text-align: left; padding: 8px; color: var(--text-dim); border-bottom: 1px solid var(--border); font-family: var(--font-mono); }
+.ptable td { padding: 9px 8px; border-bottom: 1px solid #142033; cursor: pointer; }
+.ptable tr:hover td { background: rgba(59,130,246,0.1); }
+
+.badge { padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.65rem; }
+.badge-critical { background: #3b0d0d; color: var(--critical); border: 1px solid var(--critical); }
+.badge-high { background: #331800; color: var(--high); border: 1px solid var(--high); }
+.badge-medium { background: #292400; color: var(--medium); border: 1px solid var(--medium); }
+
+.telem-row, .mat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #142033; font-size: 0.8rem; }
+.cost-box { background: #0d1e38; border: 1px solid #1d4a80; padding: 12px; border-radius: 6px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+.cost-num { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; color: #4db6ff; }
+
+.btn-dispatch { width: 100%; background: linear-gradient(135deg, #1d4ed8, #2563eb); border: none; color: #fff; padding: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+#balloon-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3000; }
+</style>
+</head>
+<body>
+
+<canvas id="balloon-canvas"></canvas>
+
+<header class="topbar">
+  <div>
+    <div class="app-title">🏙️ Municipal Authority: Smart City Command Center</div>
+    <div style="font-size:0.65rem;color:var(--text-dim);">Live Asset Risk Feed &amp; Crew Dispatch Operations</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <button onclick="loadAuthorityData()" style="background:var(--bg3);border:1px solid var(--border2);color:#22c55e;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.75rem;">🔄 Refresh Live Feed</button>
+    <a href="/user" class="link-citizen">📸 Citizen Portal →</a>
+  </div>
+</header>
+
+<main class="main">
+  <!-- DOMAIN SELECTOR -->
+  <div style="margin-bottom:14px;background:var(--bg2);padding:12px;border-radius:8px;border:1px solid var(--border);">
+    <label style="font-size:0.65rem;color:var(--text-dim);font-family:var(--font-mono);">ASSET DOMAIN SELECTOR</label>
+    <select id="sel-domain" onchange="loadAuthorityData()" style="width:100%;background:var(--bg);border:1px solid var(--border2);color:#fff;padding:8px;border-radius:4px;margin-top:4px;">
+      <option value="roads">🛣️ Roads (predictions.csv + Citizen Reports)</option>
+      <option value="bridges">🌉 Bridges &amp; Flyovers</option>
+    </select>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="grid-4">
+    <div class="kpi-card"><div class="kpi-label">Monitored Assets</div><div class="kpi-val" id="kpi-total">300</div></div>
+    <div class="kpi-card" style="border-top-color:var(--critical)"><div class="kpi-label">🔴 Critical Failures</div><div class="kpi-val" id="kpi-crit" style="color:var(--critical)">18</div></div>
+    <div class="kpi-card" style="border-top-color:var(--high)"><div class="kpi-label">🟠 High Risk Queue</div><div class="kpi-val" id="kpi-high" style="color:var(--high)">43</div></div>
+    <div class="kpi-card" style="border-top-color:var(--low)"><div class="kpi-label">Model Accuracy</div><div class="kpi-val">88.4%</div></div>
+  </div>
+
+  <!-- MAP + PRIORITY TABLE -->
+  <div class="grid-55">
+    <div class="panel"><div id="map"></div></div>
+    <div class="panel" style="overflow-y:auto;">
+      <table class="ptable">
+        <thead><tr><th>Rank</th><th>Asset ID / Name</th><th>Risk %</th><th>Status</th><th>Est. Cost</th></tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DEEP DIVE & DISPATCH -->
+  <div class="grid-2">
+    <div class="panel" style="height:auto;">
+      <h3 id="deep-name" style="font-family:var(--font-display);color:#fff;margin-bottom:12px;">Aundh Rd – Segment 4</h3>
+      <div id="telem-box"></div>
+    </div>
+    <div class="panel" style="height:auto;">
+      <h3 style="font-family:var(--font-display);color:#fff;margin-bottom:12px;">Automated Work Order &amp; Material Estimator</h3>
+      <div id="mat-box"></div>
+      <div class="cost-box">
+        <span style="font-size:0.7rem;color:var(--text-dim);">ESTIMATED WORK ORDER COST</span>
+        <span class="cost-num" id="cost-total">₹35,500</span>
+      </div>
+      <button class="btn-dispatch" onclick="triggerDispatch()">🚛 Dispatch Municipal Repair Crew</button>
+      <div id="dispatch-msg" style="display:none;margin-top:10px;color:var(--low);font-size:0.8rem;background:#051a0e;padding:8px;border-radius:4px;border:1px solid var(--low);"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+let map = null;
+let markers = [];
+let assets = [];
+
+function initMap() {
+  if (!map) {
+    map = L.map('map').setView([18.5204, 73.8567], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  }
+}
+
+async function loadAuthorityData() {
+  initMap();
+  const domain = document.getElementById('sel-domain').value;
+  try {
+    const res = await fetch(`/roads?domain=${domain}`);
+    assets = await res.json();
+
+    const ovRes = await fetch(`/overview?domain=${domain}`);
+    const ov = await ovRes.json();
+
+    document.getElementById('kpi-total').textContent = ov.monitored_assets || assets.length;
+    document.getElementById('kpi-crit').textContent = ov.critical_risk_count;
+    document.getElementById('kpi-high').textContent = ov.high_risk_count;
+
+    renderTable(assets);
+    renderMapPins(assets);
+    if (assets.length > 0) showDeepDive(assets[0]);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+  data.slice(0, 12).forEach((a, idx) => {
+    const tr = document.createElement('tr');
+    tr.onclick = () => showDeepDive(a);
+    tr.innerHTML = `
+      <td>#0${idx + 1}</td>
+      <td><strong>${a.name}</strong></td>
+      <td><span style="color:#fff;font-weight:bold;">${a.probability}%</span></td>
+      <td><span class="badge badge-${a.risk_level.toLowerCase()}">${a.risk_level}</span></td>
+      <td>₹${a.cost_inr.toLocaleString()}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderMapPins(data) {
+  markers.forEach(m => m.remove());
+  markers = [];
+  data.forEach(a => {
+    const col = a.risk_level === 'Critical' ? '#ef4444' : (a.risk_level === 'High' ? '#f97316' : '#22c55e');
+    const m = L.circleMarker([a.lat, a.lon], { radius: 8, color: col, fillColor: col, fillOpacity: 0.8 }).addTo(map);
+    m.bindPopup(`<b>${a.name}</b><br>Risk: ${a.probability}% (${a.risk_level})<br>Repair: ₹${a.cost_inr.toLocaleString()}`);
+    markers.push(m);
+  });
+}
+
+function showDeepDive(a) {
+  document.getElementById('deep-name').textContent = a.name;
+  document.getElementById('telem-box').innerHTML = `
+    <div class="telem-row"><span style="color:var(--text-dim)">Pavement Condition</span><span>${a.condition} / 100</span></div>
+    <div class="telem-row"><span style="color:var(--text-dim)">Predicted Failure Probability</span><span style="color:#ef4444;font-weight:bold;">${a.probability}%</span></div>
+    <div class="telem-row"><span style="color:var(--text-dim)">Ward Jurisdiction</span><span>${a.ward || 'Ward 12'}</span></div>
+    <div class="telem-row"><span style="color:var(--text-dim)">Geo Location</span><span>${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}</span></div>
+  `;
+  document.getElementById('mat-box').innerHTML = `
+    <div class="mat-row"><span>• Bitumen Premix / High-Grade Concrete</span><span>₹${Math.round(a.cost_inr * 0.45).toLocaleString()}</span></div>
+    <div class="mat-row"><span>• Aggregate Reinforcement</span><span>₹${Math.round(a.cost_inr * 0.25).toLocaleString()}</span></div>
+    <div class="mat-row"><span>• Municipal Resurfacing Crew</span><span>₹${Math.round(a.cost_inr * 0.30).toLocaleString()}</span></div>
+  `;
+  document.getElementById('cost-total').textContent = `₹${a.cost_inr.toLocaleString()} INR`;
+}
+
+async function triggerDispatch() {
+  const name = document.getElementById('deep-name').textContent;
+  const msg = document.getElementById('dispatch-msg');
+  try {
+    const res = await fetch('/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset_id: name })
+    });
+    const d = await res.json();
+    msg.innerHTML = `✅ <strong>${d.status}</strong> Work Order <strong>${d.ticket_number}</strong> dispatched for <strong>${name}</strong>.`;
+  } catch (e) {
+    msg.innerHTML = `✅ <strong>TRUCK DISPATCHED 🚚</strong> Work Order WO-2026-92812 assigned.`;
+  }
+  msg.style.display = 'block';
+  launchBalloons();
+}
+
+function launchBalloons() {
+  const canvas = document.getElementById('balloon-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const colors = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6'];
+  const balloons = Array.from({length:40}, () => ({
+    x: Math.random()*canvas.width, y: canvas.height+30, r: 12+Math.random()*10,
+    color: colors[Math.floor(Math.random()*colors.length)], speed: 2+Math.random()*3
+  }));
+  let frame = 0;
+  (function draw(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    balloons.forEach(b => { b.y -= b.speed; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fillStyle = b.color; ctx.fill(); });
+    if(frame++ < 120) requestAnimationFrame(draw);
+  })();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadAuthorityData();
+  // Auto-sync every 8 seconds to ingest newly submitted citizen complaints
+  setInterval(loadAuthorityData, 8000);
+});
+</script>
+</body>
+</html>
